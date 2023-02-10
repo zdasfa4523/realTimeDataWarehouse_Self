@@ -18,7 +18,7 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 public class DimApp {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1); // -->此处设置为1 是因为topic_db只有1个分区 生产环境有几个分区就设置几个并行度数据
 /*
@@ -38,6 +38,7 @@ public class DimApp {
         DataStreamSource<String> kfDS = env.addSource(MyKafkaUtil.getFlinkKafkaConsumer("topic_db", "dim_app_01"));
 
         // todo 2.0 过滤topic_db 中的数据并转换为JSON 格式(保留新增 变化 以及初始化数据)
+        // 对于new OutTag()进行测输出流的数据  除了可以写匿名内部类的方式 还可以在形参内部指定TYPEInformation,避免泛型擦除问题
         SingleOutputStreamOperator<JSONObject> jsonObjDS
                 = kfDS.flatMap((FlatMapFunction<String, JSONObject>) (value, out) -> {
             if (value != null) {
@@ -86,11 +87,12 @@ public class DimApp {
         // todo 6.0 根据广播状态中的参数来处理(过滤)主流数据
         // 问题: 输出的泛型参数写什么?
         // 回答: 我们这个输出要做什么? 要的是经过主流的数据过滤之后(原来四十多张表过滤之后只剩下维表数据) 数据类型 因此是JsonObject
-        coStream.process(new DIM_MyBroadcastFunction(stateDesc));
+        SingleOutputStreamOperator<JSONObject> hbaseDS = coStream.process(new DIM_MyBroadcastFunction(stateDesc));
 
         // todo 7.0 将数据写出到Phoenix
-
+        hbaseDS.print(">>>>>>>");
         // todo 8.0 启动任务
+        env.execute("DimAPP");
 
 
     }
